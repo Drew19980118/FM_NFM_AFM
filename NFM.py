@@ -15,7 +15,6 @@ class DNN(nn.Module):
         self.layers = nn.ModuleList([
             nn.Linear(in_features, out_features, bias=True) for in_features, out_features in zip(hidden_units[:-1], hidden_units[1:])
         ])
-        print(self.layers)
 
     def forward(self, x):
         for layer in self.layers:
