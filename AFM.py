@@ -69,7 +69,7 @@ class AFM(nn.Module):
         return output
 
 
-def getCriteo(data_path='./data/train-simple.csv'):
+def getCriteo(data_path='./data/train.csv'):
     df_data = pd.read_csv(data_path, sep=',')
     df_data.drop(['Id'], axis=1, inplace=True)
 
