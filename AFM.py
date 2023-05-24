@@ -26,8 +26,8 @@ class AFM(nn.Module):
         })
 
         # 构建注意力网络
-        self.attention = nn.Linear(embedding_dim, embedding_dim, bias=True)
-        self.project = nn.Linear(embedding_dim, 1)
+        self.attention = nn.Linear(embedding_dim, 12, bias=True)
+        self.project = nn.Linear(12, 1)
 
         # 构建线性部分
         self.linear_part = nn.Linear(self.__dense_features_num + self.__sparse_features_num, 1, bias=True)
@@ -59,13 +59,11 @@ class AFM(nn.Module):
         cross_feas = embedding_feas[:, row, :] * embedding_feas[:, col, :]
 
         # 在交叉特征维度计算softmax，用来衡量交叉特征的权重
-        attention_scores = F.softmax(self.project(F.relu(self.attention(cross_feas))) / 0.01, dim=1)
+        attention_scores = F.softmax(self.project(F.relu(self.attention(cross_feas))) / 0.1, dim=1)
         attention_output = torch.sum(cross_feas * attention_scores, dim=1)
         part_2 = self.predict_layer(attention_output)
         # 一阶特征与二阶交叉特征结果 (偏置包含在一阶特征中)
-        score = part_1 + part_2
         output = torch.sigmoid(part_1 + part_2)
-        # print(1,output)
         return output
 
 
@@ -133,7 +131,16 @@ class TrainTask:
         batch_id = 0
         for batch_id, (feas, labels) in enumerate(train_dataloader):
             feas, labels = Variable(feas).to(self.__device), Variable(labels).to(self.__device)
-
+            # size = len(labels)
+            # if size % 2 == 0:
+            #     num_ones = size // 2
+            #     num_zeros = size // 2
+            # else:
+            #     num_ones = size // 2 + 1
+            #     num_zeros = size // 2
+            # data = [1.] * num_ones + [0.] * num_zeros
+            # random.shuffle(data)
+            # new_labels = torch.tensor(data, dtype=torch.float)
             loss, outputs = self.__train_one_batch(feas, labels)
             loss_sum += loss
         self.train_loss.append(loss_sum / (batch_id + 1))
@@ -263,6 +270,6 @@ if __name__ == "__main__":
 
     task = TrainTask(model, lr=0.0001, use_cuda=False)
 
-    task.train(train_dataset, val_dataset, epochs=50, batch_size=16)
+    task.train(train_dataset, val_dataset, epochs=10, batch_size=16)
 
     task.plot_loss_curve()

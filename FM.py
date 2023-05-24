@@ -250,6 +250,6 @@ if __name__ == "__main__":
 
     task = TrainTask(model, use_cuda=False)
 
-    task.train(train_dataset, val_dataset, 50, 16)
+    task.train(train_dataset, val_dataset, 10, 16)
 
     task.plot_loss_curve()
