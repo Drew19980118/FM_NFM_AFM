@@ -12,45 +12,45 @@ import pandas as pd
 class AFM(nn.Module):
     def __init__(self, features_info, embedding_dim):
         super().__init__()
-        # 解析 feature_info
+        # parse feature_info
         self.dense_features, self.sparse_features, sparse_features_nunique, dense_features_nunique = features_info
 
-        # 计算 dense 和 sparse 类型特征的数量
+        # calculate the number of dense and sparse type features
         self.__dense_features_num = len(self.dense_features)
         self.__sparse_features_num = len(self.sparse_features)
 
-        # 构建Embedding层
+        # building the Embedding layer
         self.embedding_layers = nn.ModuleDict({
             "embed_" + key: nn.Embedding(num, embedding_dim)
             for key, num in sparse_features_nunique.items()
         })
 
-        # 构建注意力网络
+        # building an attention network
         self.attention = nn.Linear(embedding_dim, 12, bias=True)
         self.project = nn.Linear(12, 1)
 
-        # 构建线性部分
+        # build linear part
         self.linear_part = nn.Linear(self.__dense_features_num + self.__sparse_features_num, 1, bias=True)
 
-        # 交叉特征输出部分
+        # cross-featured output section
         self.predict_layer = nn.Linear(embedding_dim, 1)
 
     def forward(self, x):
-        # 从输入x中单独拿出 sparse_input 和 dense_input
+        # separate out sparse_input and dense_input from input x
         dense_inputs, sparse_inputs = x[:, :self.__dense_features_num], x[:, self.__dense_features_num:]
         sparse_inputs = sparse_inputs.long()
 
-        # 一阶线性部分计算
+        # first-order linear partial calculation
         part_1 = self.linear_part(x)
 
-        # embedding 操作
+        # embedding
         embedding_feas = [self.embedding_layers["embed_" + key](sparse_inputs[:, idx]) for idx, key in
                           enumerate(self.sparse_features)]
 
         embedding_feas = torch.stack(embedding_feas).permute(
             (1, 0, 2))  # [features_nums, batch, embedding_dim] -> [batch, features_nums, embedding_dim]
 
-        # embedding 交叉计算
+        # embedding cross-calculation
         row, col = [], []
         for i in range(self.__sparse_features_num):
             for j in range(i + 1, self.__sparse_features_num):
@@ -58,11 +58,11 @@ class AFM(nn.Module):
                 col.append(j)
         cross_feas = embedding_feas[:, row, :] * embedding_feas[:, col, :]
 
-        # 在交叉特征维度计算softmax，用来衡量交叉特征的权重
+        # compute softmax in the cross feature dimension, which is used to measure the weight of cross features
         attention_scores = F.softmax(self.project(F.relu(self.attention(cross_feas))) / 0.1, dim=1)
         attention_output = torch.sum(cross_feas * attention_scores, dim=1)
         part_2 = self.predict_layer(attention_output)
-        # 一阶特征与二阶交叉特征结果 (偏置包含在一阶特征中)
+        # results of first-order features and second-order cross features (bias is included in first-order features)
         output = torch.sigmoid(part_1 + part_2)
         return output
 
@@ -74,15 +74,15 @@ def getCriteo(data_path='./data/train.csv'):
     dense_features = ['I' + str(i + 1) for i in range(13)]
     sparse_features = ['C' + str(i + 1) for i in range(26)]
 
-    # 填充缺失值
+    # fill missing values
     df_data[sparse_features] = df_data[sparse_features].fillna('-1')
     df_data[dense_features] = df_data[dense_features].fillna(0)
 
-    # 类别型特征进行 LabelEncoder 编码
+    # labelEncoder encoding of category-type features
     for feature in sparse_features:
         df_data[feature] = LabelEncoder().fit_transform(df_data[feature])
 
-    # 数值型特征进行 特征归一化
+    # numerical features for feature normalization
     df_data[dense_features] = MinMaxScaler().fit_transform(df_data[dense_features])
 
     label = df_data.pop('Label')
@@ -110,20 +110,22 @@ class TrainTask:
         self.eval_f1 = []
 
     def __train_one_batch(self, feas, labels):
-        """ 训练一个batch
+        """
+        train one batch
         """
         self.__optimizer.zero_grad()
-        # 1. 正向
+        # 1. forward
         outputs = self.__model(feas)
-        # 2. loss求解
+        # 2. loss
         loss = self.__loss_fn(outputs.squeeze(), labels)
-        # 3. 梯度回传
+        # 3. gradient backward
         loss.backward()
         self.__optimizer.step()
         return loss.item(), outputs
 
     def __train_one_epoch(self, train_dataloader, epoch_id):
-        """ 训练一个epoch
+        """
+        train one epoch
         """
         self.__model.train()
 
@@ -131,16 +133,6 @@ class TrainTask:
         batch_id = 0
         for batch_id, (feas, labels) in enumerate(train_dataloader):
             feas, labels = Variable(feas).to(self.__device), Variable(labels).to(self.__device)
-            # size = len(labels)
-            # if size % 2 == 0:
-            #     num_ones = size // 2
-            #     num_zeros = size // 2
-            # else:
-            #     num_ones = size // 2 + 1
-            #     num_zeros = size // 2
-            # data = [1.] * num_ones + [0.] * num_zeros
-            # random.shuffle(data)
-            # new_labels = torch.tensor(data, dtype=torch.float)
             loss, outputs = self.__train_one_batch(feas, labels)
             loss_sum += loss
         self.train_loss.append(loss_sum / (batch_id + 1))
@@ -153,12 +145,11 @@ class TrainTask:
 
         for epoch in range(epochs):
             print('-' * 20 + ' Epoch {} starts '.format(epoch) + '-' * 20)
-            # 训练一个轮次
             self.__train_one_epoch(train_data_loader, epoch_id=epoch)
-            # 验证一遍
             self.__eval(eval_data_loader, epoch_id=epoch)
     def __eval(self, eval_dataloader, epoch_id):
-        """ 验证集上推理一遍
+        """
+        reasoning over the validation set
         """
         batch_id = 0
         accuracy_sum = 0
@@ -172,7 +163,6 @@ class TrainTask:
                 feas, labels = Variable(feas).to(self.__device), Variable(labels).to(self.__device)
                 y_true = []
                 y_pred = []
-                # 1. 正向
                 outputs = self.__model(feas)
                 outputs = outputs.view(-1)
                 y_true.extend(labels.tolist())
@@ -196,7 +186,8 @@ class TrainTask:
         print("Evaluate Epoch: %d, mean accuracy: %.5f, mean precision: %.5f, mean recall: %.5f, mean f1: %.5f" % (epoch_id, accuracy_sum / (batch_id + 1), precision_sum / (batch_id + 1), recall_sum / (batch_id + 1), f1_sum / (batch_id + 1)))
 
     def __plot_metric_train(self, train_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(train_metrics) + 1)
         plt.plot(epochs, train_metrics, 'bo--')
@@ -207,7 +198,8 @@ class TrainTask:
         plt.show()
 
     def __plot_metric_val_acc(self, val_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(val_metrics) + 1)
         plt.plot(epochs, val_metrics, 'ro--')
@@ -218,7 +210,8 @@ class TrainTask:
         plt.show()
 
     def __plot_metric_val_prec(self, val_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(val_metrics) + 1)
         plt.plot(epochs, val_metrics, 'ro--')
@@ -229,7 +222,8 @@ class TrainTask:
         plt.show()
 
     def __plot_metric_val_recall(self, val_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(val_metrics) + 1)
         plt.plot(epochs, val_metrics, 'ro--')
@@ -240,7 +234,8 @@ class TrainTask:
         plt.show()
 
     def __plot_metric_val_F1(self, val_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(val_metrics) + 1)
         plt.plot(epochs, val_metrics, 'ro--')
@@ -260,12 +255,12 @@ class TrainTask:
 if __name__ == "__main__":
     df_data, label, features_info = getCriteo()
 
-    # 划分、构建数据集、数据通道
+    # partition, build data sets, data channels
     x_train, x_val, y_train, y_val = train_test_split(df_data, label, test_size=0.2, random_state=2022)
     train_dataset = TensorDataset(torch.tensor(x_train.values).float(), torch.tensor(y_train.values).float())
     val_dataset = TensorDataset(torch.tensor(x_val.values).float(), torch.tensor(y_val.values).float())
 
-    # 构建模型
+    # build model
     model = AFM(features_info, embedding_dim=8)
 
     task = TrainTask(model, lr=0.0001, use_cuda=False)

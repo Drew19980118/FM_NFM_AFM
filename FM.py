@@ -11,10 +11,10 @@ import pandas as pd
 class FM(nn.Module):
     def __init__(self, features_info, embedding_dim):
         super(FM, self).__init__()
-        # 解析特征信息
+        # parsing feature information
         self.dense_features, self.sparse_features, self.sparse_features_nunique = features_info
 
-        # 解析拿到所有 数值型 和 稀疏型特征信息
+        # parse to get all numeric and sparse feature information
         self.__dense_features_num = len(self.dense_features)
         self.__sparse_features_num = len(self.sparse_features)
 
@@ -24,15 +24,15 @@ class FM(nn.Module):
             for key, num_embeds in self.sparse_features_nunique.items()
         })
 
-        # 构建线性部分
+        # build linear part
         self.linear_part = nn.Linear(self.__dense_features_num + self.__sparse_features_num, 1, bias=True)
 
     def forward(self, x):
-        # 从输入x中单独拿出 sparse_input 和 dense_input
+        # separate out sparse_input and dense_input from input x
         dense_inputs, sparse_inputs = x[:, :self.__dense_features_num], x[:, self.__dense_features_num:]
         sparse_inputs = sparse_inputs.long()
 
-        # 一阶线性部分计算
+        # first-order linear partial calculation
         part_1 = self.linear_part(x)
 
         embedding_feas = [self.embeddings["embed_" + key](sparse_inputs[:, idx]) for idx, key in
@@ -48,7 +48,6 @@ class FM(nn.Module):
         second_part = torch.unsqueeze(second_part, 1)
 
         output = torch.sigmoid(part_1 + second_part)
-        # print(1,output)
         return output
 
 
@@ -59,15 +58,15 @@ def getCriteo(data_path='./data/train.csv'):
     dense_features = ['I' + str(i + 1) for i in range(13)]
     sparse_features = ['C' + str(i + 1) for i in range(26)]
 
-    # 填充缺失值
+    # fill missing values
     df_data[sparse_features] = df_data[sparse_features].fillna('-1')
     df_data[dense_features] = df_data[dense_features].fillna(0)
 
-    # 类别型特征进行 LabelEncoder 编码
+    # labelEncoder encoding of category-type features
     for feature in sparse_features:
         df_data[feature] = LabelEncoder().fit_transform(df_data[feature])
 
-    # 数值型特征进行 特征归一化
+    # numerical features for feature normalization
     df_data[dense_features] = MinMaxScaler().fit_transform(df_data[dense_features])
 
     label = df_data.pop('Label')
@@ -93,21 +92,23 @@ class TrainTask:
         self.eval_f1 = []
 
     def __train_one_batch(self, feas, labels):
-        """ 训练一个batch
+        """
+        train one batch
         """
         self.__optimizer.zero_grad()
-        # 1. 正向
+        # 1. forward
         outputs = self.__model(feas)
-        # 2. loss求解
+        # 2. loss
         loss = self.__loss_fn(outputs.squeeze(), labels)
-        # 3. 梯度回传
+        # 3. gradient backward
         loss.backward()
         self.__optimizer.step()
 
         return loss.item(), outputs
 
     def __train_one_epoch(self, train_dataloader, epoch_id):
-        """ 训练一个epoch
+        """
+        train one epoch
         """
         self.__model.train()
 
@@ -123,20 +124,18 @@ class TrainTask:
         print("Training Epoch: %d, mean loss: %.5f" % (epoch_id, (loss_sum / (batch_id + 1))))
 
     def train(self, train_dataset, eval_dataset, epochs, batch_size):
-        # 构造DataLoader
+        # construct DataLoader
         train_data_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
         eval_data_loader = DataLoader(dataset=eval_dataset, batch_size=batch_size, shuffle=True)
 
         for epoch in range(epochs):
             print('-' * 20 + ' Epoch {} starts '.format(epoch) + '-' * 20)
-
-            # 训练一个轮次
             self.__train_one_epoch(train_data_loader, epoch_id=epoch)
-            # 验证一遍
             self.__eval(eval_data_loader, epoch_id=epoch)
 
     def __eval(self, eval_dataloader, epoch_id):
-        """ 验证集上推理一遍
+        """
+        reasoning over the validation set
         """
         batch_id = 0
         accuracy_sum = 0
@@ -150,8 +149,6 @@ class TrainTask:
                 feas, labels = Variable(feas).to(self.__device), Variable(labels).to(self.__device)
                 y_true = []
                 y_pred = []
-                count = 0
-                # 1. 正向
                 outputs = self.__model(feas)
                 outputs = outputs.view(-1)
                 y_true.extend(labels.tolist())
@@ -175,7 +172,8 @@ class TrainTask:
         print("Evaluate Epoch: %d, mean accuracy: %.5f, mean precision: %.5f, mean recall: %.5f, mean f1: %.5f" % (epoch_id, accuracy_sum / (batch_id + 1), precision_sum / (batch_id + 1), recall_sum / (batch_id + 1), f1_sum / (batch_id + 1)))
 
     def __plot_metric_train(self, train_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(train_metrics) + 1)
         plt.plot(epochs, train_metrics, 'bo--')
@@ -186,7 +184,8 @@ class TrainTask:
         plt.show()
 
     def __plot_metric_val_acc(self, val_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(val_metrics) + 1)
         plt.plot(epochs, val_metrics, 'ro--')
@@ -197,7 +196,8 @@ class TrainTask:
         plt.show()
 
     def __plot_metric_val_prec(self, val_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(val_metrics) + 1)
         plt.plot(epochs, val_metrics, 'ro--')
@@ -208,7 +208,8 @@ class TrainTask:
         plt.show()
 
     def __plot_metric_val_recall(self, val_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(val_metrics) + 1)
         plt.plot(epochs, val_metrics, 'ro--')
@@ -219,7 +220,8 @@ class TrainTask:
         plt.show()
 
     def __plot_metric_val_F1(self, val_metrics, metric_name):
-        """ 指标可视化
+        """
+        metrics visualization
         """
         epochs = range(1, len(val_metrics) + 1)
         plt.plot(epochs, val_metrics, 'ro--')
@@ -240,12 +242,12 @@ class TrainTask:
 if __name__ == "__main__":
     df_data, label, features_info = getCriteo()
 
-    # 划分、构建数据集、数据通道
+    # partition, build data sets, data channels
     x_train, x_val, y_train, y_val = train_test_split(df_data, label, test_size=0.2, random_state=2022)
     train_dataset = TensorDataset(torch.tensor(x_train.values).float(), torch.tensor(y_train.values).float())
     val_dataset = TensorDataset(torch.tensor(x_val.values).float(), torch.tensor(y_val.values).float())
 
-    # 构建模型
+    # build model
     model = FM(features_info, embedding_dim=8)
 
     task = TrainTask(model, use_cuda=False)
