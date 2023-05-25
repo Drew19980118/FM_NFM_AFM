@@ -139,7 +139,7 @@ class TrainTask:
         print("Training Epoch: %d, mean loss: %.5f" % (epoch_id, loss_sum / (batch_id + 1)))
 
     def train(self, train_dataset, eval_dataset, epochs, batch_size):
-        # 构造DataLoader
+        # construct DataLoader
         train_data_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
         eval_data_loader = DataLoader(dataset=eval_dataset, batch_size=batch_size, shuffle=True)
 
